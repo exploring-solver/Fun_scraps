@@ -305,6 +305,20 @@ const App = () => {
             </Alert>
           )}
         </Snackbar>
+
+        {/* Footer */}
+        <Box component="footer" sx={{ mt: 'auto', py: 2, textAlign: 'center', bgcolor: 'background.paper' }}>
+          <Typography variant="body2" color="textSecondary">
+            Made with ❤️ by{' '}
+            <a href="https://github.com/exploring-solver" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
+              exploring-solver
+            </a>{' '}
+            &{' '}
+            <a href="https://github.com/singhchanmeet" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
+              singhchanmeet
+            </a>
+          </Typography>
+        </Box>
       </Box>
     </ThemeProvider>
   );
