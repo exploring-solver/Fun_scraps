@@ -209,6 +209,16 @@ const App = () => {
                 <PersonIcon />
               </Avatar>
             </IconButton>
+            {/* Toggle Onboarding Button */}
+            <IconButton
+              color="inherit"
+              onClick={() => setIsOnboarded((prev) => !prev)}
+              sx={{ ml: 2 }}
+            >
+              <Typography variant="button">
+                {isOnboarded ? 'Show Onboarding' : 'Skip Onboarding'}
+              </Typography>
+            </IconButton>
           </Toolbar>
         </AppBar>
         

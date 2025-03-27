@@ -3,7 +3,8 @@ import {
   Box, Paper, Typography, Stepper, Step, StepLabel, StepContent,
   Button, TextField, Grid, RadioGroup, Radio, FormControlLabel,
   FormControl, FormLabel, Autocomplete, Chip, Card, CardContent,
-  CircularProgress, Alert, Divider, InputAdornment, IconButton
+  CircularProgress, Alert, Divider, InputAdornment, IconButton,
+  Switch
 } from '@mui/material';
 import {
   CalendarMonth as CalendarIcon,
@@ -157,7 +158,7 @@ const OnboardingFlow = () => {
                   required
                 />
                 
-                <DatePicker
+                {/* <DatePicker
                   label="Birth Date"
                   value={birthDetails.date}
                   onChange={(newValue) => setBirthDetails({ ...birthDetails, date: newValue })}
@@ -177,8 +178,8 @@ const OnboardingFlow = () => {
                       }}
                     />
                   )}
-                />
-                
+                /> */}
+                <input type="date" />
                 <FormControl component="fieldset" margin="normal">
                   <FormLabel component="legend">Do you know your birth time?</FormLabel>
                   <RadioGroup
@@ -191,7 +192,7 @@ const OnboardingFlow = () => {
                   </RadioGroup>
                 </FormControl>
                 
-                {birthDetails.isTimeKnown === 'yes' && (
+                {/* {birthDetails.isTimeKnown === 'yes' && (
                   <TimePicker
                     label="Birth Time"
                     value={birthDetails.time}
@@ -214,7 +215,7 @@ const OnboardingFlow = () => {
                       />
                     )}
                   />
-                )}
+                )} */}
                 
                 <Autocomplete
                   options={majorCities}
