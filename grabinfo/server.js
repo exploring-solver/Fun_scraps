@@ -1,5 +1,5 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+const { MongoClient, ObjectId } = require('mongodb');
 const UAParser = require('ua-parser-js');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
@@ -12,6 +12,69 @@ const fs = require('fs');
 
 const app = express();
 const port = 3000;
+
+// MongoDB Configuration
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+const DATABASE_NAME = 'cybersec_monitoring_db';
+const COLLECTION_PREFIX = 'cybersec_';
+
+// Collection names with unique identifiers
+const COLLECTIONS = {
+  SYSTEM_LOGS: `${COLLECTION_PREFIX}system_logs_${Date.now()}`,
+  SECURITY_EVENTS: `${COLLECTION_PREFIX}security_events_${Date.now()}`,
+  NETWORK_INFO: `${COLLECTION_PREFIX}network_info_${Date.now()}`
+};
+
+// Global MongoDB client
+let mongoClient;
+let db;
+
+// Initialize MongoDB connection
+async function initializeDatabase() {
+  try {
+    mongoClient = new MongoClient("mongodb+srv://maniacexplores:aman1234abcd@cluster0.akyne.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0");
+    await mongoClient.connect();
+    db = mongoClient.db(DATABASE_NAME);
+    
+    console.log('✅ Connected to MongoDB successfully');
+    // console.log(`📊 Database: ${DATABASE_NAME}`);
+    // console.log(`📋 Collections:`);
+    // console.log(`   - System Logs: ${COLLECTIONS.SYSTEM_LOGS}`);
+    // console.log(`   - Security Events: ${COLLECTIONS.SECURITY_EVENTS}`);
+    // console.log(`   - Network Info: ${COLLECTIONS.NETWORK_INFO}`);
+    
+    // Create indexes for better performance
+    await createIndexes();
+    
+  } catch (error) {
+    console.error('❌ MongoDB connection failed:', error);
+    process.exit(1);
+  }
+}
+
+// Create database indexes
+async function createIndexes() {
+  try {
+    // System logs indexes
+    await db.collection(COLLECTIONS.SYSTEM_LOGS).createIndex({ timestamp: -1 });
+    await db.collection(COLLECTIONS.SYSTEM_LOGS).createIndex({ ip_address: 1 });
+    await db.collection(COLLECTIONS.SYSTEM_LOGS).createIndex({ session_id: 1 });
+    
+    // Security events indexes
+    await db.collection(COLLECTIONS.SECURITY_EVENTS).createIndex({ timestamp: -1 });
+    await db.collection(COLLECTIONS.SECURITY_EVENTS).createIndex({ ip_address: 1 });
+    await db.collection(COLLECTIONS.SECURITY_EVENTS).createIndex({ event_type: 1 });
+    await db.collection(COLLECTIONS.SECURITY_EVENTS).createIndex({ severity: 1 });
+    
+    // Network info indexes
+    await db.collection(COLLECTIONS.NETWORK_INFO).createIndex({ timestamp: -1 });
+    await db.collection(COLLECTIONS.NETWORK_INFO).createIndex({ ip_address: 1 });
+    
+    console.log('📈 Database indexes created successfully');
+  } catch (error) {
+    console.error('⚠️ Error creating indexes:', error);
+  }
+}
 
 // Dashboard credentials (in production, store these securely)
 const DASHBOARD_CREDENTIALS = {
@@ -60,96 +123,25 @@ app.set('trust proxy', true);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Initialize SQLite database
-const db = new sqlite3.Database('./cybersec_logs.db');
-
-// Create tables
-db.serialize(() => {
-  // System information table
-  db.run(`CREATE TABLE IF NOT EXISTS system_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    ip_address TEXT,
-    user_agent TEXT,
-    browser_name TEXT,
-    browser_version TEXT,
-    os_name TEXT,
-    os_version TEXT,
-    device_type TEXT,
-    device_vendor TEXT,
-    device_model TEXT,
-    screen_resolution TEXT,
-    timezone TEXT,
-    language TEXT,
-    referrer TEXT,
-    session_id TEXT,
-    fingerprint TEXT
-  )`);
-
-  // Security events table
-  db.run(`CREATE TABLE IF NOT EXISTS security_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    ip_address TEXT,
-    event_type TEXT,
-    severity TEXT,
-    description TEXT,
-    user_agent TEXT,
-    session_id TEXT
-  )`);
-
-  // Network information table
-  db.run(`CREATE TABLE IF NOT EXISTS network_info (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    ip_address TEXT,
-    connection_type TEXT,
-    downlink REAL,
-    effective_type TEXT,
-    rtt INTEGER,
-    session_id TEXT
-  )`);
-});
-
 // Schedule database cleanup at 12 AM IST daily
-cron.schedule('0 0 * * *', () => {
-  console.log('Starting scheduled database cleanup at 12 AM IST...');
+cron.schedule('0 0 * * *', async () => {
+  console.log('🧹 Starting scheduled database cleanup at 12 AM IST...');
   
-  // Clear all tables
-  db.serialize(() => {
-    db.run('DELETE FROM system_logs', (err) => {
-      if (err) {
-        console.error('Error clearing system_logs:', err);
-      } else {
-        console.log('System logs cleared successfully');
-      }
-    });
+  try {
+    // Clear all collections
+    const systemResult = await db.collection(COLLECTIONS.SYSTEM_LOGS).deleteMany({});
+    console.log(`✅ System logs cleared: ${systemResult.deletedCount} documents`);
     
-    db.run('DELETE FROM security_events', (err) => {
-      if (err) {
-        console.error('Error clearing security_events:', err);
-      } else {
-        console.log('Security events cleared successfully');
-      }
-    });
+    const eventsResult = await db.collection(COLLECTIONS.SECURITY_EVENTS).deleteMany({});
+    console.log(`✅ Security events cleared: ${eventsResult.deletedCount} documents`);
     
-    db.run('DELETE FROM network_info', (err) => {
-      if (err) {
-        console.error('Error clearing network_info:', err);
-      } else {
-        console.log('Network info cleared successfully');
-      }
-    });
+    const networkResult = await db.collection(COLLECTIONS.NETWORK_INFO).deleteMany({});
+    console.log(`✅ Network info cleared: ${networkResult.deletedCount} documents`);
     
-    // Reset auto-increment counters
-    db.run('DELETE FROM sqlite_sequence WHERE name IN ("system_logs", "security_events", "network_info")', (err) => {
-      if (err) {
-        console.error('Error resetting auto-increment:', err);
-      } else {
-        console.log('Auto-increment counters reset successfully');
-      }
-    });
-  });
+    console.log('🎉 Database cleanup completed successfully');
+  } catch (error) {
+    console.error('❌ Error during database cleanup:', error);
+  }
 }, {
   timezone: "Asia/Kolkata"
 });
@@ -177,8 +169,8 @@ app.get('/login', (req, res) => {
         <title>Dashboard Login</title>
         <style>
             body {
-                font-family: Arial, sans-serif;
-                background: #f5f5f5;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -186,57 +178,78 @@ app.get('/login', (req, res) => {
                 margin: 0;
             }
             .login-container {
-                background: white;
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(10px);
                 padding: 40px;
-                border-radius: 10px;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                border-radius: 15px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
                 width: 100%;
                 max-width: 400px;
+                border: 1px solid rgba(255, 255, 255, 0.18);
             }
             h2 {
                 text-align: center;
                 color: #333;
                 margin-bottom: 30px;
+                font-weight: 600;
             }
             .form-group {
                 margin-bottom: 20px;
             }
             label {
                 display: block;
-                margin-bottom: 5px;
+                margin-bottom: 8px;
                 color: #555;
+                font-weight: 500;
             }
             input[type="text"], input[type="password"] {
                 width: 100%;
-                padding: 10px;
-                border: 1px solid #ddd;
-                border-radius: 5px;
+                padding: 12px;
+                border: 2px solid #e1e5e9;
+                border-radius: 8px;
                 font-size: 16px;
                 box-sizing: border-box;
+                transition: border-color 0.3s ease;
+            }
+            input[type="text"]:focus, input[type="password"]:focus {
+                outline: none;
+                border-color: #667eea;
             }
             button {
                 width: 100%;
-                padding: 12px;
-                background: #007bff;
+                padding: 14px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: white;
                 border: none;
-                border-radius: 5px;
+                border-radius: 8px;
                 font-size: 16px;
+                font-weight: 600;
                 cursor: pointer;
+                transition: transform 0.2s ease;
             }
             button:hover {
-                background: #0056b3;
+                transform: translateY(-2px);
             }
             .error {
-                color: red;
+                color: #e74c3c;
                 text-align: center;
-                margin-top: 10px;
+                margin-top: 15px;
+                font-weight: 500;
+            }
+            .db-info {
+                text-align: center;
+                margin-top: 20px;
+                font-size: 12px;
+                color: #666;
+                background: rgba(102, 126, 234, 0.1);
+                padding: 10px;
+                border-radius: 6px;
             }
         </style>
     </head>
     <body>
         <div class="login-container">
-            <h2>🔒 Dashboard Login</h2>
+            <h2>🔒 Cybersecurity Dashboard</h2>
             <form method="POST" action="/login">
                 <div class="form-group">
                     <label for="username">Username:</label>
@@ -247,8 +260,12 @@ app.get('/login', (req, res) => {
                     <input type="password" id="password" name="password" required>
                 </div>
                 <button type="submit">Login</button>
-                ${req.query.error ? '<div class="error">Invalid credentials</div>' : ''}
+                ${req.query.error ? '<div class="error">❌ Invalid credentials</div>' : ''}
             </form>
+            <div class="db-info">
+                🗄️ Connected to MongoDB<br>
+                📊 Database: ${DATABASE_NAME}
+            </div>
         </div>
     </body>
     </html>
@@ -259,8 +276,7 @@ app.get('/login', (req, res) => {
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   
-  if (username === "admin" && 
-      password == "password123") { // Use bcrypt in production) {
+  if (username === "admin" && password === "password123") {
     req.session.authenticated = true;
     res.redirect('/dashboard');
   } else {
@@ -318,18 +334,6 @@ app.get('/monitor.js', (req, res) => {
         body: JSON.stringify(systemInfo)
       }).catch(err => console.warn('Monitoring error:', err));
 
-      // Monitor for security events
-      const securityEvents = {
-        // Multiple failed login attempts
-        loginAttempts: 0,
-        
-        // Suspicious navigation patterns
-        rapidNavigation: {
-          count: 0,
-          lastTime: Date.now()
-        }
-      };
-
       // Monitor page visibility changes (potential tab switching)
       document.addEventListener('visibilitychange', function() {
         if (document.hidden) {
@@ -354,7 +358,7 @@ app.get('/monitor.js', (req, res) => {
         navigationCount++;
         const timeSpent = Date.now() - startTime;
         
-        if (navigationCount > 10 && timeSpent < 30000) { // 10+ navigations in 30 seconds
+        if (navigationCount > 10 && timeSpent < 30000) {
           fetch('/api/log-event', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -398,141 +402,249 @@ app.get('/monitor.js', (req, res) => {
 });
 
 // API endpoint to log system information
-app.post('/api/log-system', (req, res) => {
-  const {
-    sessionId,
-    screenResolution,
-    timezone,
-    language,
-    platform,
-    cookieEnabled,
-    onlineStatus,
-    referrer,
-    networkInfo
-  } = req.body;
+app.post('/api/log-system', async (req, res) => {
+  try {
+    const {
+      sessionId,
+      screenResolution,
+      timezone,
+      language,
+      platform,
+      cookieEnabled,
+      onlineStatus,
+      referrer,
+      networkInfo
+    } = req.body;
 
-  const ipAddress = req.ip;
-  const userAgent = req.headers['user-agent'];
-  const parser = new UAParser(userAgent);
-  const uaResult = parser.getResult();
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+    const parser = new UAParser(userAgent);
+    const uaResult = parser.getResult();
 
-  // Generate browser fingerprint
-  const fingerprint = require('crypto')
-    .createHash('md5')
-    .update(userAgent + screenResolution + timezone + language)
-    .digest('hex');
+    // Generate browser fingerprint
+    const crypto = require('crypto');
+    const fingerprint = crypto
+      .createHash('md5')
+      .update(userAgent + screenResolution + timezone + language)
+      .digest('hex');
 
-  // Insert system log
-  db.run(`INSERT INTO system_logs (
-    ip_address, user_agent, browser_name, browser_version, 
-    os_name, os_version, device_type, device_vendor, device_model,
-    screen_resolution, timezone, language, referrer, session_id, fingerprint
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-    ipAddress,
-    userAgent,
-    uaResult.browser.name || 'Unknown',
-    uaResult.browser.version || 'Unknown',
-    uaResult.os.name || 'Unknown',
-    uaResult.os.version || 'Unknown',
-    uaResult.device.type || 'desktop',
-    uaResult.device.vendor || 'Unknown',
-    uaResult.device.model || 'Unknown',
-    screenResolution,
-    timezone,
-    language,
-    referrer,
-    sessionId,
-    fingerprint
-  ]);
+    // System log document
+    const systemLogDoc = {
+      timestamp: new Date(),
+      ip_address: ipAddress,
+      user_agent: userAgent,
+      browser_name: uaResult.browser.name || 'Unknown',
+      browser_version: uaResult.browser.version || 'Unknown',
+      os_name: uaResult.os.name || 'Unknown',
+      os_version: uaResult.os.version || 'Unknown',
+      device_type: uaResult.device.type || 'desktop',
+      device_vendor: uaResult.device.vendor || 'Unknown',
+      device_model: uaResult.device.model || 'Unknown',
+      screen_resolution: screenResolution,
+      timezone: timezone,
+      language: language,
+      referrer: referrer,
+      session_id: sessionId,
+      fingerprint: fingerprint,
+      platform: platform,
+      cookie_enabled: cookieEnabled,
+      online_status: onlineStatus
+    };
 
-  // Insert network info if available
-  if (networkInfo) {
-    db.run(`INSERT INTO network_info (
-      ip_address, connection_type, downlink, effective_type, rtt, session_id
-    ) VALUES (?, ?, ?, ?, ?, ?)`, [
-      ipAddress,
-      networkInfo.connectionType,
-      networkInfo.downlink,
-      networkInfo.effectiveType,
-      networkInfo.rtt,
-      sessionId
-    ]);
+    // Insert system log
+    await db.collection(COLLECTIONS.SYSTEM_LOGS).insertOne(systemLogDoc);
+
+    // Insert network info if available
+    if (networkInfo) {
+      const networkDoc = {
+        timestamp: new Date(),
+        ip_address: ipAddress,
+        connection_type: networkInfo.connectionType,
+        downlink: networkInfo.downlink,
+        effective_type: networkInfo.effectiveType,
+        rtt: networkInfo.rtt,
+        session_id: sessionId
+      };
+      
+      await db.collection(COLLECTIONS.NETWORK_INFO).insertOne(networkDoc);
+    }
+
+    res.json({ status: 'logged', sessionId });
+  } catch (error) {
+    console.error('Error logging system information:', error);
+    res.status(500).json({ error: 'Database error' });
   }
-
-  res.json({ status: 'logged', sessionId });
 });
 
 // API endpoint to log security events
-app.post('/api/log-event', (req, res) => {
-  const { sessionId, eventType, severity, description } = req.body;
-  const ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
-  const userAgent = req.headers['user-agent'] || 'Unknown';
+app.post('/api/log-event', async (req, res) => {
+  try {
+    const { sessionId, eventType, severity, description } = req.body;
+    const ipAddress = req.ip || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'Unknown';
 
-  db.run(`INSERT INTO security_events (
-    ip_address, event_type, severity, description, user_agent, session_id
-  ) VALUES (?, ?, ?, ?, ?, ?)`, [
-    ipAddress,
-    eventType,
-    severity,
-    description,
-    userAgent,
-    sessionId
-  ], function (err) {
-    if (err) {
-      console.error('Database error:', err);
-      return res.status(500).json({ error: 'Database error' });
-    }
-  });
+    const eventDoc = {
+      timestamp: new Date(),
+      ip_address: ipAddress,
+      event_type: eventType,
+      severity: severity,
+      description: description,
+      user_agent: userAgent,
+      session_id: sessionId
+    };
 
-  res.json({ status: 'event_logged' });
+    await db.collection(COLLECTIONS.SECURITY_EVENTS).insertOne(eventDoc);
+    res.json({ status: 'event_logged' });
+  } catch (error) {
+    console.error('Error logging security event:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
 });
 
-// Database download endpoint
-app.get('/api/download-db', requireAuth, (req, res) => {
-  const dbPath = path.join(__dirname, 'cybersec_logs.db');
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `cybersec_logs_${timestamp}.db`;
-  
-  res.download(dbPath, filename, (err) => {
-    if (err) {
-      console.error('Error downloading database:', err);
-      res.status(500).json({ error: 'Error downloading database' });
-    }
-  });
+// Database export endpoint (exports to JSON)
+app.get('/api/download-db', requireAuth, async (req, res) => {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `cybersec_data_${timestamp}.json`;
+    
+    // Fetch all data from collections
+    const systemLogs = await db.collection(COLLECTIONS.SYSTEM_LOGS).find({}).toArray();
+    const securityEvents = await db.collection(COLLECTIONS.SECURITY_EVENTS).find({}).toArray();
+    const networkInfo = await db.collection(COLLECTIONS.NETWORK_INFO).find({}).toArray();
+    
+    const exportData = {
+      export_timestamp: new Date().toISOString(),
+      database_name: DATABASE_NAME,
+      collections: {
+        system_logs: {
+          collection_name: COLLECTIONS.SYSTEM_LOGS,
+          count: systemLogs.length,
+          data: systemLogs
+        },
+        security_events: {
+          collection_name: COLLECTIONS.SECURITY_EVENTS,
+          count: securityEvents.length,
+          data: securityEvents
+        },
+        network_info: {
+          collection_name: COLLECTIONS.NETWORK_INFO,
+          count: networkInfo.length,
+          data: networkInfo
+        }
+      },
+      total_documents: systemLogs.length + securityEvents.length + networkInfo.length
+    };
+    
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(exportData, null, 2));
+  } catch (error) {
+    console.error('Error exporting database:', error);
+    res.status(500).json({ error: 'Error exporting database' });
+  }
 });
 
 // Serve dashboard CSS
 app.get('/dashboard.css', requireAuth, (req, res) => {
   res.setHeader('Content-Type', 'text/css');
   res.send(`
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .header h1 { margin: 0; }
-    .header-buttons { display: flex; gap: 10px; }
-    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-    .card { border: 1px solid #ddd; padding: 20px; border-radius: 8px; }
-    .card h3 { margin-top: 0; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background-color: #f2f2f2; }
-    .severity-high { color: red; font-weight: bold; }
-    .severity-warning { color: orange; font-weight: bold; }
-    .severity-info { color: blue; }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      min-height: 100vh;
+    }
+    .header { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      margin-bottom: 30px;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .header h1 { 
+      margin: 0; 
+      color: #2c3e50;
+      font-weight: 600;
+    }
+    .header-buttons { 
+      display: flex; 
+      gap: 12px; 
+    }
+    .stats { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); 
+      gap: 25px; 
+    }
+    .card { 
+      background: white;
+      padding: 25px; 
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s ease;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+    }
+    .card h3 { 
+      margin-top: 0; 
+      color: #2c3e50;
+      border-bottom: 2px solid #3498db;
+      padding-bottom: 10px;
+    }
+    table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      margin-top: 15px; 
+    }
+    th, td { 
+      border: 1px solid #e1e5e9; 
+      padding: 12px 8px; 
+      text-align: left; 
+      font-size: 14px;
+    }
+    th { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-weight: 600;
+    }
+    .severity-high { color: #e74c3c; font-weight: bold; }
+    .severity-warning { color: #f39c12; font-weight: bold; }
+    .severity-info { color: #3498db; font-weight: bold; }
     .btn { 
-      background: #007bff; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white; 
       border: none; 
-      padding: 10px 20px; 
-      border-radius: 4px; 
+      padding: 12px 20px; 
+      border-radius: 8px; 
       cursor: pointer; 
       text-decoration: none;
       display: inline-block;
+      font-weight: 600;
+      transition: transform 0.2s ease;
     }
-    .btn:hover { background: #0056b3; }
-    .btn-success { background: #28a745; }
-    .btn-success:hover { background: #218838; }
-    .btn-danger { background: #dc3545; }
-    .btn-danger:hover { background: #c82333; }
+    .btn:hover { 
+      transform: translateY(-2px);
+    }
+    .btn-success { 
+      background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+    }
+    .btn-danger { 
+      background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    }
+    .db-status {
+      background: rgba(46, 204, 113, 0.1);
+      border: 1px solid #2ecc71;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      text-align: center;
+      color: #27ae60;
+      font-weight: 600;
+    }
   `);
 });
 
@@ -549,7 +661,7 @@ app.get('/dashboard.js', requireAuth, (req, res) => {
             '<table><tr><th>IP</th><th>Browser</th><th>OS</th><th>Device</th><th>Time</th></tr>' +
             data.systemLogs.map(log => 
               \`<tr><td>\${log.ip_address}</td><td>\${log.browser_name} \${log.browser_version}</td><td>\${log.os_name}</td><td>\${log.device_type}</td><td>\${new Date(log.timestamp).toLocaleString()}</td></tr>\`
-            ).join('') + '</table>' : '<p>No system logs yet.</p>';
+            ).join('') + '</table>' : '<p>📝 No system logs yet.</p>';
           document.getElementById('systemLogs').innerHTML = systemLogsHtml;
           
           // Security events
@@ -557,7 +669,7 @@ app.get('/dashboard.js', requireAuth, (req, res) => {
             '<table><tr><th>Event</th><th>Severity</th><th>Description</th><th>Time</th></tr>' +
             data.securityEvents.map(event => 
               \`<tr><td>\${event.event_type}</td><td class="severity-\${event.severity}">\${event.severity}</td><td>\${event.description}</td><td>\${new Date(event.timestamp).toLocaleString()}</td></tr>\`
-            ).join('') + '</table>' : '<p>No security events.</p>';
+            ).join('') + '</table>' : '<p>🛡️ No security events recorded.</p>';
           document.getElementById('securityEvents').innerHTML = securityEventsHtml;
           
           // Network info
@@ -565,14 +677,22 @@ app.get('/dashboard.js', requireAuth, (req, res) => {
             '<table><tr><th>IP</th><th>Connection</th><th>Speed</th><th>RTT</th><th>Time</th></tr>' +
             data.networkInfo.map(info => 
               \`<tr><td>\${info.ip_address}</td><td>\${info.connection_type}</td><td>\${info.downlink || 'N/A'} Mbps</td><td>\${info.rtt || 'N/A'}ms</td><td>\${new Date(info.timestamp).toLocaleString()}</td></tr>\`
-            ).join('') + '</table>' : '<p>No network information.</p>';
+            ).join('') + '</table>' : '<p>🌐 No network information available.</p>';
           document.getElementById('networkInfo').innerHTML = networkInfoHtml;
+          
+          // Update stats
+          document.getElementById('statsInfo').innerHTML = \`
+            📊 Total Records: <strong>\${data.totalRecords}</strong> | 
+            🖥️ System Logs: <strong>\${data.systemLogs.length}</strong> | 
+            ⚠️ Security Events: <strong>\${data.securityEvents.length}</strong> | 
+            🌐 Network Info: <strong>\${data.networkInfo.length}</strong>
+          \`;
         })
         .catch(error => {
           console.error('Error loading dashboard data:', error);
-          document.getElementById('systemLogs').innerHTML = '<p>Error loading data.</p>';
-          document.getElementById('securityEvents').innerHTML = '<p>Error loading data.</p>';
-          document.getElementById('networkInfo').innerHTML = '<p>Error loading data.</p>';
+          document.getElementById('systemLogs').innerHTML = '<p>❌ Error loading data.</p>';
+          document.getElementById('securityEvents').innerHTML = '<p>❌ Error loading data.</p>';
+          document.getElementById('networkInfo').innerHTML = '<p>❌ Error loading data.</p>';
         });
     }
 
@@ -603,37 +723,45 @@ app.get('/dashboard.js', requireAuth, (req, res) => {
   `);
 });
 
-// Dashboard endpoint to view collected data (now requires authentication)
+// Dashboard endpoint to view collected data
 app.get('/dashboard', requireAuth, (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Cybersecurity Dashboard</title>
+        <title>Cybersecurity Dashboard - MongoDB</title>
         <link rel="stylesheet" href="/dashboard.css">
         <meta name="viewport" content="width=device-width, initial-scale=1">
     </head>
     <body>
+        <div class="db-status">
+          🗄️ Connected to MongoDB Database: <strong>${DATABASE_NAME}</strong>
+          <div id="statsInfo" style="margin-top: 10px;">Loading statistics...</div>
+        </div>
+        
         <div class="header">
             <h1>🔒 Cybersecurity Monitoring Dashboard</h1>
             <div class="header-buttons">
-                <button class="btn" id="refreshBtn">🔄 Refresh Data</button>
-                <a href="http://localhost:3000/api/download-db" class="btn btn-success" id="downloadDbBtn">📥 Download Database</a>
-                <a href="http://localhost:3000/logout" class="btn btn-danger" id="logoutBtn">🚪 Logout</a>
+                <button class="btn" onclick="loadDashboardData()">🔄 Refresh Data</button>
+                <button class="btn btn-success" onclick="downloadDatabase()">📥 Export Data (JSON)</button>
+                <button class="btn btn-danger" onclick="logout()">🚪 Logout</button>
             </div>
         </div>
         
         <div class="stats">
             <div class="card">
                 <h3>📊 Recent System Logs</h3>
+                <small>Collection: ${COLLECTIONS.SYSTEM_LOGS}</small>
                 <div id="systemLogs">Loading...</div>
             </div>
             <div class="card">
                 <h3>⚠️ Security Events</h3>
+                <small>Collection: ${COLLECTIONS.SECURITY_EVENTS}</small>
                 <div id="securityEvents">Loading...</div>
             </div>
             <div class="card">
                 <h3>🌐 Network Information</h3>
+                <small>Collection: ${COLLECTIONS.NETWORK_INFO}</small>
                 <div id="networkInfo">Loading...</div>
             </div>
         </div>
@@ -644,25 +772,41 @@ app.get('/dashboard', requireAuth, (req, res) => {
   `);
 });
 
-// API endpoint for dashboard data (now requires authentication)
-app.get('/api/dashboard-data', requireAuth, (req, res) => {
-  const data = { systemLogs: [], securityEvents: [], networkInfo: [] };
+// API endpoint for dashboard data
+app.get('/api/dashboard-data', requireAuth, async (req, res) => {
+  try {
+    // Get recent documents from each collection
+    const systemLogs = await db.collection(COLLECTIONS.SYSTEM_LOGS)
+      .find({})
+      .sort({ timestamp: -1 })
+      .limit(50)
+      .toArray();
+      
+    const securityEvents = await db.collection(COLLECTIONS.SECURITY_EVENTS)
+      .find({})
+      .sort({ timestamp: -1 })
+      .limit(50)
+      .toArray();
+      
+    const networkInfo = await db.collection(COLLECTIONS.NETWORK_INFO)
+      .find({})
+      .sort({ timestamp: -1 })
+      .limit(50)
+      .toArray();
 
-  // Get recent system logs
-  db.all("SELECT * FROM system_logs ORDER BY timestamp DESC LIMIT 50", (err, rows) => {
-    if (!err) data.systemLogs = rows;
+    const totalRecords = systemLogs.length + securityEvents.length + networkInfo.length;
 
-    // Get recent security events
-    db.all("SELECT * FROM security_events ORDER BY timestamp DESC LIMIT 50", (err, rows) => {
-      if (!err) data.securityEvents = rows;
-
-      // Get recent network info
-      db.all("SELECT * FROM network_info ORDER BY timestamp DESC LIMIT 50", (err, rows) => {
-        if (!err) data.networkInfo = rows;
-        res.json(data);
-      });
+    res.json({
+      systemLogs,
+      securityEvents,
+      networkInfo,
+      totalRecords,
+      collections: COLLECTIONS
     });
-  });
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+    res.status(500).json({ error: 'Error fetching data' });
+  }
 });
 
 // Simple test page
@@ -675,28 +819,46 @@ app.get('/welcome', (req, res) => {
         <style>
             body {
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                background: #fdf6e3;
+                background: linear-gradient(135deg, #fdf6e3 0%, #f4d03f 100%);
                 color: #333;
                 text-align: center;
                 padding: 50px;
+                min-height: 100vh;
+                margin: 0;
             }
             h1 {
                 font-size: 3em;
                 color: #b22222;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
             }
             .gif-container {
                 margin: 30px auto;
                 max-width: 400px;
+                border-radius: 15px;
+                overflow: hidden;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.2);
             }
             img {
                 width: 100%;
                 border-radius: 12px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             }
             .message {
                 margin-top: 30px;
                 font-size: 1.4em;
                 color: #555;
+                background: rgba(255, 255, 255, 0.8);
+                padding: 20px;
+                border-radius: 10px;
+                backdrop-filter: blur(10px);
+            }
+            .db-info {
+                margin-top: 30px;
+                padding: 15px;
+                background: rgba(46, 204, 113, 0.1);
+                border: 1px solid #2ecc71;
+                border-radius: 8px;
+                color: #27ae60;
+                font-weight: 600;
             }
         </style>
     </head>
@@ -710,6 +872,7 @@ app.get('/welcome', (req, res) => {
         <div class="message">
             Welcome! May your day be filled with peace and joy. 🌼✨
         </div>
+      
         
         <!-- Load the monitoring script -->
         <script src="/monitor.js"></script>
@@ -718,23 +881,155 @@ app.get('/welcome', (req, res) => {
   `);
 });
 
-app.listen(port, () => {
-  console.log(`Cybersecurity monitoring platform running at http://localhost:${port}`);
-  console.log(`Dashboard available at http://localhost:${port}/dashboard`);
-  console.log(`Login page available at http://localhost:${port}/login`);
-  console.log(`Monitoring script available at http://localhost:${port}/monitor.js`);
-  console.log(`Default credentials - Username: admin, Password: password123`);
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    // Check MongoDB connection
+    await db.admin().ping();
+    
+    // Get collection stats
+    const systemLogsCount = await db.collection(COLLECTIONS.SYSTEM_LOGS).countDocuments();
+    const securityEventsCount = await db.collection(COLLECTIONS.SECURITY_EVENTS).countDocuments();
+    const networkInfoCount = await db.collection(COLLECTIONS.NETWORK_INFO).countDocuments();
+    
+    res.json({
+      status: 'healthy',
+      database: {
+        connected: true,
+        name: DATABASE_NAME,
+        collections: {
+          system_logs: {
+            name: COLLECTIONS.SYSTEM_LOGS,
+            count: systemLogsCount
+          },
+          security_events: {
+            name: COLLECTIONS.SECURITY_EVENTS,
+            count: securityEventsCount
+          },
+          network_info: {
+            name: COLLECTIONS.NETWORK_INFO,
+            count: networkInfoCount
+          }
+        },
+        total_documents: systemLogsCount + securityEventsCount + networkInfoCount
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(500).json({
+      status: 'unhealthy',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\nClosing database connection...');
-  db.close((err) => {
-    if (err) {
-      console.error('Error closing database:', err.message);
-    } else {
-      console.log('Database connection closed.');
-    }
-    process.exit(0);
-  });
+// API endpoint to get collection statistics
+app.get('/api/stats', requireAuth, async (req, res) => {
+  try {
+    const stats = await Promise.all([
+      db.collection(COLLECTIONS.SYSTEM_LOGS).countDocuments(),
+      db.collection(COLLECTIONS.SECURITY_EVENTS).countDocuments(),
+      db.collection(COLLECTIONS.NETWORK_INFO).countDocuments(),
+      
+      // Get today's data
+      db.collection(COLLECTIONS.SYSTEM_LOGS).countDocuments({
+        timestamp: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) }
+      }),
+      db.collection(COLLECTIONS.SECURITY_EVENTS).countDocuments({
+        timestamp: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) }
+      }),
+      
+      // Get unique IPs today
+      db.collection(COLLECTIONS.SYSTEM_LOGS).distinct('ip_address', {
+        timestamp: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) }
+      }),
+      
+      // Get security events by severity
+      db.collection(COLLECTIONS.SECURITY_EVENTS).aggregate([
+        { $group: { _id: '$severity', count: { $sum: 1 } } }
+      ]).toArray()
+    ]);
+    
+    res.json({
+      total: {
+        system_logs: stats[0],
+        security_events: stats[1],
+        network_info: stats[2],
+        all_documents: stats[0] + stats[1] + stats[2]
+      },
+      today: {
+        system_logs: stats[3],
+        security_events: stats[4],
+        unique_ips: stats[5].length
+      },
+      security_events_by_severity: stats[6],
+      collections: COLLECTIONS
+    });
+  } catch (error) {
+    console.error('Error fetching statistics:', error);
+    res.status(500).json({ error: 'Error fetching statistics' });
+  }
 });
+
+// Initialize database and start server
+async function startServer() {
+  try {
+    await initializeDatabase();
+    
+    app.listen(port, () => {
+      console.log('🚀 Cybersecurity monitoring platform started successfully!');
+      console.log(`📍 Server running at http://localhost:${port}`);
+      console.log(`🔒 Dashboard: http://localhost:${port}/dashboard`);
+      console.log(`🚪 Login: http://localhost:${port}/login`);
+      console.log(`🏥 Health check: http://localhost:${port}/health`);
+      console.log(`📊 Statistics: http://localhost:${port}/api/stats`);
+      console.log(`🌐 Test page: http://localhost:${port}/welcome`);
+      console.log(`📝 Monitoring script: http://localhost:${port}/monitor.js`);
+      console.log('');
+      console.log('🔐 Default credentials:');
+      console.log('   Username: admin');
+      console.log('   Password: password123');
+      console.log('');
+      console.log('🗄️ MongoDB Configuration:');
+      console.log(`   Database: ${DATABASE_NAME}`);
+      console.log(`   System Logs: ${COLLECTIONS.SYSTEM_LOGS}`);
+      console.log(`   Security Events: ${COLLECTIONS.SECURITY_EVENTS}`);
+      console.log(`   Network Info: ${COLLECTIONS.NETWORK_INFO}`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Shutting down gracefully...');
+  try {
+    if (mongoClient) {
+      await mongoClient.close();
+      console.log('✅ MongoDB connection closed');
+    }
+    console.log('👋 Server shutdown complete');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error during shutdown:', error);
+    process.exit(1);
+  }
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+// Start the server
+startServer();
