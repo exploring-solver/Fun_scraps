@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cybersecurity Platform Test</title>
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self'; 
+        script-src 'self' 'unsafe-inline' http://localhost:3000; 
+        connect-src 'self' http://localhost:3000; 
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' data:;
+        font-src 'self';
+    ">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #4a5568;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .header p {
+            color: #718096;
+            font-size: 1.1em;
+        }
+
+        .test-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .test-section h2 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #4299e1;
+            padding-bottom: 10px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .test-btn {
+            background: linear-gradient(135deg, #4299e1, #3182ce);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+        }
+
+        .test-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(66, 153, 225, 0.4);
+        }
+
+        .danger-btn {
+            background: linear-gradient(135deg, #e53e3e, #c53030);
+            box-shadow: 0 4px 15px rgba(229, 62, 62, 0.3);
+        }
+
+        .danger-btn:hover {
+            box-shadow: 0 6px 20px rgba(229, 62, 62, 0.4);
+        }
+
+        .status-display {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .status-display h3 {
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+
+        .status-item {
+            margin: 8px 0;
+            padding: 8px;
+            border-left: 4px solid #4299e1;
+            background: white;
+        }
+
+        .login-form {
+            display: grid;
+            gap: 15px;
+            max-width: 400px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .form-group input {
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4299e1;
+        }
+
+        .monitoring-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(72, 187, 120, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .offline {
+            background: rgba(229, 62, 62, 0.9);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .monitoring-status {
+                position: static;
+                margin-bottom: 20px;
+                text-align: center;
+            }
+        }
+
+        .footer {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 40px;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="monitoring-status" id="monitoringStatus">
+        🔒 Monitoring Active
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ Cybersecurity Platform Test</h1>
+            <p>This page tests various security monitoring features and behaviors</p>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 System Information</h2>
+            <div class="status-display" id="systemInfo">
+                <h3>Collected System Data:</h3>
+                <div id="systemData">Loading system information...</div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔍 Behavior Testing</h2>
+            <div class="button-group">
+                <button class="test-btn" onclick="testRapidClicks()">Test Rapid Clicks</button>
+                <button class="test-btn" onclick="testTabSwitching()">Simulate Tab Switch</button>
+                <button class="test-btn" onclick="testDevTools()">Trigger DevTools Alert</button>
+                <button class="test-btn" onclick="testNetworkInfo()">Check Network Info</button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔐 Login Testing</h2>
+            <p style="margin-bottom: 15px;">Test failed login attempts (will trigger security alerts):</p>
+            <div class="login-form">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" placeholder="Enter username">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" placeholder="Enter password">
+                </div>
+                <button class="test-btn" onclick="attemptLogin()">Login (Will Fail)</button>
+                <button class="danger-btn" onclick="multipleFailedLogins()">Test Multiple Failed Logins</button>
+            </div>
+            <div id="loginAttempts" style="margin-top: 15px; font-weight: bold;"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>⚠️ Security Events Log</h2>
+            <div class="status-display" id="securityEvents">
+                <h3>Recent Security Events:</h3>
+                <div id="eventsList">No events yet...</div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🌐 Navigation Testing</h2>
+            <div class="button-group">
+                <button class="test-btn" onclick="simulateRapidNavigation()">Simulate Rapid Navigation</button>
+                <button class="test-btn" onclick="testPageReload()">Reload Page</button>
+                <button class="test-btn" onclick="testNewWindow()">Open New Window</button>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>💡 Open browser developer tools to see console logs and network requests</p>
+            <p>Visit <a href="http://localhost:3000/dashboard" style="color: #ffd700;">Dashboard</a> to view collected data</p>
+        </div>
+    </div>
+
+    <!-- Load the monitoring script from our server -->
+    <script src="http://localhost:3000/monitor.js"></script>
+
+    <script>
+        // Test variables
+        let loginAttemptCount = 0;
+        let rapidClickCount = 0;
+        let securityEvents = [];
+
+        // Display system information
+        function displaySystemInfo() {
+            const info = {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                language: navigator.language,
+                cookieEnabled: navigator.cookieEnabled,
+                onlineStatus: navigator.onLine,
+                screenResolution: `${screen.width}x${screen.height}`,
+                viewport: `${window.innerWidth}x${window.innerHeight}`,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                referrer: document.referrer || 'Direct access'
+            };
+
+            const systemData = document.getElementById('systemData');
+            systemData.innerHTML = Object.entries(info)
+                .map(([key, value]) => `
+                    <div class="status-item">
+                        <strong>${key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</strong> ${value}
+                    </div>
+                `).join('');
+        }
+
+        // Test rapid clicks
+        function testRapidClicks() {
+            rapidClickCount++;
+            console.log(`Rapid click #${rapidClickCount}`);
+            
+            if (rapidClickCount >= 5) {
+                logSecurityEvent('rapid_clicking', 'warning', `User performed ${rapidClickCount} rapid clicks`);
+                rapidClickCount = 0;
+            }
+        }
+
+        // Test tab switching simulation
+        function testTabSwitching() {
+            // Simulate visibility change
+            Object.defineProperty(document, 'hidden', { value: true, writable: true });
+            document.dispatchEvent(new Event('visibilitychange'));
+            
+            setTimeout(() => {
+                Object.defineProperty(document, 'hidden', { value: false, writable: true });
+                document.dispatchEvent(new Event('visibilitychange'));
+            }, 1000);
+            
+            logSecurityEvent('tab_switching_test', 'info', 'Manual tab switching simulation triggered');
+        }
+
+        // Test DevTools detection trigger
+        function testDevTools() {
+            logSecurityEvent('devtools_test', 'warning', 'Manual DevTools detection test triggered');
+            alert('DevTools detection test triggered! Check the security events log.');
+        }
+
+        // Test network information
+        function testNetworkInfo() {
+            if ('connection' in navigator) {
+                const connection = navigator.connection;
+                const networkInfo = {
+                    effectiveType: connection.effectiveType,
+                    downlink: connection.downlink,
+                    rtt: connection.rtt,
+                    type: connection.type
+                };
+                console.log('Network Info:', networkInfo);
+                logSecurityEvent('network_check', 'info', `Network: ${JSON.stringify(networkInfo)}`);
+            } else {
+                console.log('Network API not supported');
+                logSecurityEvent('network_check', 'info', 'Network API not supported in this browser');
+            }
+        }
+
+        // Test login attempts
+        function attemptLogin() {
+            loginAttemptCount++;
+            const loginAttemptsDiv = document.getElementById('loginAttempts');
+            loginAttemptsDiv.textContent = `Failed login attempts: ${loginAttemptCount}`;
+            loginAttemptsDiv.style.color = loginAttemptCount > 3 ? '#e53e3e' : '#4299e1';
+            
+            logSecurityEvent('failed_login', loginAttemptCount > 3 ? 'high' : 'warning', 
+                `Failed login attempt #${loginAttemptCount}`);
+        }
+
+        // Test multiple failed logins
+        function multipleFailedLogins() {
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => attemptLogin(), i * 200);
+            }
+        }
+
+        // Simulate rapid navigation
+        function simulateRapidNavigation() {
+            const startTime = Date.now();
+            let navCount = 0;
+            
+            const interval = setInterval(() => {
+                navCount++;
+                // Simulate navigation by changing hash
+                window.location.hash = `nav-${navCount}-${Date.now()}`;
+                
+                if (navCount >= 8) {
+                    clearInterval(interval);
+                    const timeSpent = Date.now() - startTime;
+                    logSecurityEvent('rapid_navigation', 'warning', 
+                        `Simulated ${navCount} navigations in ${timeSpent}ms`);
+                }
+            }, 100);
+        }
+
+        // Test page reload
+        function testPageReload() {
+            if (confirm('This will reload the page. Continue?')) {
+                logSecurityEvent('manual_reload', 'info', 'User triggered manual page reload');
+                setTimeout(() => location.reload(), 500);
+            }
+        }
+
+        // Test new window
+        function testNewWindow() {
+            const newWindow = window.open('about:blank', '_blank', 'width=400,height=300');
+            logSecurityEvent('new_window', 'info', 'User opened new window');
+            
+            setTimeout(() => {
+                if (newWindow) {
+                    newWindow.close();
+                }
+            }, 2000);
+        }
+
+        // Log security events locally and to server
+        function logSecurityEvent(eventType, severity, description) {
+            const event = {
+                timestamp: new Date().toISOString(),
+                eventType,
+                severity,
+                description
+            };
+            
+            securityEvents.unshift(event);
+            if (securityEvents.length > 10) {
+                securityEvents = securityEvents.slice(0, 10);
+            }
+            
+            updateSecurityEventsDisplay();
+            
+            // Send to server if monitoring script is loaded
+            if (typeof fetch !== 'undefined') {
+                fetch('http://localhost:3000/api/log-event', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: sessionStorage.getItem('cybersec_session') || 'test_session',
+                        eventType,
+                        severity,
+                        description
+                    })
+                }).catch(err => console.warn('Failed to log event to server:', err));
+            }
+        }
+
+        // Update security events display
+        function updateSecurityEventsDisplay() {
+            const eventsList = document.getElementById('eventsList');
+            if (securityEvents.length === 0) {
+                eventsList.innerHTML = 'No events yet...';
+                return;
+            }
+            
+            eventsList.innerHTML = securityEvents.map(event => `
+                <div class="status-item" style="border-left-color: ${getSeverityColor(event.severity)}">
+                    <strong>[${event.severity.toUpperCase()}]</strong> ${event.eventType}<br>
+                    <small>${event.description}</small><br>
+                    <small style="color: #666;">${new Date(event.timestamp).toLocaleString()}</small>
+                </div>
+            `).join('');
+        }
+
+        // Get color for severity
+        function getSeverityColor(severity) {
+            switch (severity) {
+                case 'high': return '#e53e3e';
+                case 'warning': return '#f56500';
+                case 'info': return '#4299e1';
+                default: return '#4299e1';
+            }
+        }
+
+        // Monitor server connection
+        function checkServerConnection() {
+            fetch('http://localhost:3000/api/dashboard-data')
+                .then(response => {
+                    if (response.ok) {
+                        document.getElementById('monitoringStatus').textContent = '🔒 Monitoring Active';
+                        document.getElementById('monitoringStatus').classList.remove('offline');
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('monitoringStatus').textContent = '⚠️ Server Offline';
+                    document.getElementById('monitoringStatus').classList.add('offline');
+                });
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            displaySystemInfo();
+            checkServerConnection();
+            
+            // Check server connection every 10 seconds
+            setInterval(checkServerConnection, 10000);
+        });
+
+        // Log page load event
+        logSecurityEvent('page_loaded', 'info', 'Test page loaded successfully');
+    </script>
+</body>
+</html>
